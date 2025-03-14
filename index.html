@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Pixel Dino Runner</title>
+    <link rel="icon" type="image/svg+xml" href="app-icon.svg">
+    <link rel="apple-touch-icon" href="app-icon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d3436 100%);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+        }
+
+        @keyframes gradient {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        #shaderCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        #gameContainer {
+            position: relative;
+            touch-action: none;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        #gameCanvas {
+            background: #fff;
+            image-rendering: pixelated;
+            touch-action: none;
+        }
+
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font: bold 14px 'Segoe UI', Arial;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(0, 0, 0, 0.75);
+            padding: 8px 15px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            z-index: 2;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            letter-spacing: 0.5px;
+        }
+
+        #score:hover {
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        #jumpButton {
+            position: absolute;
+            right: 20px;
+            bottom: 40px;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5);
+            border: 3px solid #fff;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            display: none;
+            z-index: 3;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.1s;
+        }
+
+        #jumpButton:active {
+            transform: scale(0.95);
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        #mainMenu,
+        #characterSelect,
+        #shopMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            padding: 30px;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+        }
+
+        .menu-button {
+            background: linear-gradient(45deg, #00b4db, #0083b0);
+            color: white;
+            border: none;
+            padding: 15px 35px;
+            margin: 12px;
+            border-radius: 25px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .menu-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(45deg, #00c6ff, #0093c4);
+        }
+
+        .character-option {
+            display: flex;
+            align-items: center;
+            background: #333;
+            padding: 10px;
+            margin: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .character-option:hover {
+            background: #444;
+        }
+
+        .color-picker {
+            margin: 10px;
+        }
+
+        .shop-item {
+            margin-bottom: 15px;
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            #jumpButton {
+                display: block;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="score">SCORE: 0</div>
+        <button id="jumpButton">JUMP</button>
+    </div>
+    <div id="mainMenu" style="display: flex; flex-direction: column;">
+        <button class="menu-button" onclick="startGame()">Start Game</button>
+        <button class="menu-button" onclick="openShop()">Shop</button>
+        <button class="menu-button" onclick="openSettings()">Settings</button>
+        <div id="highScore">High Score: 0</div>
+        <div id="persistentCoins" style="color: #FFD700; margin-top: 10px;">Coins: 0</div>
+    </div>
+
+    <div id="settingsMenu"
+        style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 20px; border-radius: 10px; color: white;">
+        <h2>Settings</h2>
+        <div>
+            <label>Sound Effects: <input type="checkbox" id="sfxToggle" checked></label>
+        </div>
+        <div>
+            <label>Background Music: <input type="checkbox" id="musicToggle" checked></label>
+        </div>
+        <div>
+            <label>Difficulty:
+                <select id="difficultySelect">
+                    <option value="easy">Easy</option>
+                    <option value="normal" selected>Normal</option>
+                    <option value="hard">Hard</option>
+                </select>
+            </label>
+        </div>
+        <button class="menu-button" onclick="closeSettings()">Back</button>
+    </div>
+
+    <div id="shopMenu"
+        style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 30px; border-radius: 20px; color: white; min-width: 300px;">
+        <h2 style="text-align: center; margin-bottom: 20px;">Shop</h2>
+        <div class="shop-item">
+            <div>Double Jump Height (Level: <span id="doubleJumpLevel">0</span>)</div>
+            <div>Cost: 100 coins</div>
+            <button class="menu-button" onclick="buyUpgrade('doubleJumpHeight')">Buy</button>
+        </div>
+        <div class="shop-item">
+            <div>Score Multiplier (Level: <span id="scoreMultLevel">0</span>)</div>
+            <div>Cost: 150 coins</div>
+            <button class="menu-button" onclick="buyUpgrade('scoreMultiplier')">Buy</button>
+        </div>
+
+        <button class="menu-button" onclick="closeShop()" style="margin-top: 20px;">Back</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const jumpButton = document.getElementById('jumpButton');
+        const mainMenu = document.getElementById('mainMenu');
+
+        canvas.width = window.innerWidth < 800 ? window.innerWidth : 800;
+        canvas.height = 300;
+
+        const sounds = {
+            jump: {play: () => { }},
+            coin: {play: () => { }},
+            powerup: {play: () => { }}
+        };
+
+        const gameState = {
+            shutdown: false,
+            isJumping: false,
+            coins: [],
+            score: 0,
+            persistentCoins: parseInt(localStorage.getItem('persistentCoins')) || 0,
+            upgrades: {
+                doubleJumpHeight: 0,
+                scoreMultiplier: 0
+            },
+            lastCoinTime: 0,
+            powerUpTimers: {
+                speedBoost: 0,
+                invincible: 0,
+                doublePoints: 0,
+                tiny: 0
+            },
+            gameSpeed: 2,
+            initialGameSpeed: 2,
+            gameActive: false,
+            lastFrameTime: null,
+            hasShield: false,
+            difficulty: 'normal',
+            obstacles: [],
+            particles: [],
+            powerUps: [],
+            highScore: parseInt(localStorage.getItem('highScore')) || 0,
+            character: {
+                color: '#3C9F4F',
+                size: 1
+            },
+            achievements: {
+                points: parseInt(localStorage.getItem('achievementPoints')) || 0,
+                unlocked: JSON.parse(localStorage.getItem('unlockedAchievements')) || [],
+                list: [
+                    {id: 'score1000', name: 'Runner', description: 'Score 1000 points', requirement: 1000},
+                    {id: 'score5000', name: 'Marathon', description: 'Score 5000 points', requirement: 5000},
+                    {id: 'coins100', name: 'Collector', description: 'Collect 100 coins', requirement: 100}
+                ]
+            },
+            totalCoins: 0,
+            lastObstacleTime: 0,
+            timeOfDay: 0,
+            powerUpEffects: {
+                speedBoost: false,
+                invincible: false,
+                doublePoints: false,
+                tiny: false
+            }
+        };
+
+        const visualEffects = {
+            particleColors: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
+            backgroundGradients: {
+                day: ['#48CAE4', '#CAF0F8'],
+                sunset: ['#FF9F1C', '#FFBF69'],
+                night: ['#023E8A', '#0077B6'],
+                rain: ['#2B2D42', '#8D99AE']
+            },
+            weather: {
+                type: 'clear',
+                raindrops: [],
+                snowflakes: [],
+                weatherChangeTimer: 0
+            },
+            powerUpTypes: ['speedBoost', 'invincibility', 'doublePoints', 'sizeChange']
+        };
+
+        const mountains = Array.from({length: 3}, (_, i) => ({
+            x: i * 400,
+            speed: 2 + i
+        }));
+
+        const dino = {
+            x: 50,
+            y: canvas.height - 60,
+            width: 50,
+            height: 50,
+            velocity: 0,
+            gravity: 0.6,
+            jumpForce: -12,
+            doubleJump: false,
+            jumpCooldown: 0,
+            maxJumpHeight: 150,
+            isGrounded: true
+        };
+
+        const ground = {
+            y: canvas.height - 30,
+            height: 30
+        };
+
+        function createParticles(x, y, color, count = 5) {
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count;
+                const speed = Math.random() * 3 + 2;
+                gameState.particles.push({
+                    x,
+                    y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 2,
+                    size: Math.max(Math.random() * 4 + 2, 1),
+                    life: 60,
+                    color,
+                    rotation: Math.random() * Math.PI * 2,
+                    opacity: 1
+                });
+            }
+        }
+
+        function spawnPowerUp() {
+            if (Math.random() < 0.01) {
+                const types = ['shield', 'speedBoost', 'timeSlowdown', 'doublePoints'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                const colors = {
+                    shield: '#4169E1',
+                    speedBoost: '#00FF00',
+                    timeSlowdown: '#9370DB',
+                    doublePoints: '#FFD700'
+                };
+
+                gameState.powerUps.push({
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - 100) + 50,
+                    width: 25,
+                    height: 25,
+                    type: type,
+                    color: colors[type],
+                    rotation: 0,
+                    floatOffset: Math.random() * Math.PI * 2
+                });
+            }
+        }
+
+        function drawGround() {
+            const time = Date.now() / 1000;
+
+
+            const groundGradient = ctx.createLinearGradient(0, ground.y, 0, ground.y + ground.height);
+            groundGradient.addColorStop(0, '#5D4037');
+            groundGradient.addColorStop(0.3, '#4E342E');
+            groundGradient.addColorStop(1, '#3E2723');
+            ctx.fillStyle = groundGradient;
+            ctx.fillRect(0, ground.y, canvas.width, ground.height);
+
+
+            ctx.save();
+            ctx.globalAlpha = 0.1;
+            for (let i = 0; i < canvas.width; i += 15) {
+                const noiseHeight = Math.sin(i * 0.1 + time) * 2;
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(i, ground.y + noiseHeight, 2, 2);
+            }
+            ctx.restore();
+
+
+            for (let i = 0; i < canvas.width; i += 8) {
+                const baseHeight = 12 + Math.sin(time * 1.5 + i * 0.3) * 4;
+                const windEffect = Math.sin(time + i * 0.1) * 3;
+
+
+                const hueShift = Math.sin(time * 0.5 + i * 0.05) * 10;
+                const grassGradient = ctx.createLinearGradient(i, ground.y, i, ground.y - baseHeight);
+                grassGradient.addColorStop(0, `hsl(${120 + hueShift}, 70%, 35%)`);
+                grassGradient.addColorStop(0.5, `hsl(${120 + hueShift}, 80%, 30%)`);
+                grassGradient.addColorStop(1, `hsl(${120 + hueShift}, 60%, 25%)`);
+
+
+                for (let j = 0; j < 3; j++) {
+                    const offset = j * 3 - 3;
+                    const height = baseHeight * (1 - j * 0.2);
+
+                    ctx.fillStyle = grassGradient;
+                    ctx.beginPath();
+                    ctx.moveTo(i + offset, ground.y);
+                    ctx.quadraticCurveTo(
+                        i + offset + windEffect * (1 - j * 0.3),
+                        ground.y - height,
+                        i + offset + 2,
+                        ground.y
+                    );
+                    ctx.fill();
+                }
+
+
+                if (Math.random() < 0.02) {
+                    const flowerColors = ['#FFE082', '#FFCCBC', '#F8BBD0'];
+                    const color = flowerColors[Math.floor(Math.random() * flowerColors.length)];
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(i, ground.y - baseHeight - 5, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+
+            ctx.save();
+            ctx.globalAlpha = 0.15;
+            const groundShine = ctx.createLinearGradient(0, ground.y, canvas.width, ground.y);
+            groundShine.addColorStop(Math.sin(time) * 0.5 + 0.5, 'rgba(255,255,255,0.1)');
+            groundShine.addColorStop(Math.cos(time) * 0.5 + 0.5, 'transparent');
+            ctx.fillStyle = groundShine;
+            ctx.fillRect(0, ground.y - 2, canvas.width, 4);
+            ctx.restore();
+
+
+            if (Math.random() < 0.2) {
+                const particleColors = ['#8D6E63', '#795548', '#6D4C41'];
+                createParticles(
+                    Math.random() * canvas.width,
+                    ground.y + Math.random() * 5,
+                    particleColors[Math.floor(Math.random() * particleColors.length)],
+                    1
+                );
+            }
+        }
+
+        function drawDino() {
+            ctx.save();
+            const bounceOffset = Math.sin(Date.now() / 200) * 3;
+            const rotationAngle = gameState.isJumping ? (dino.velocity * 0.03) : 0;
+            ctx.translate(dino.x, dino.y + bounceOffset);
+            ctx.rotate(rotationAngle);
+
+
+            const shadowGradient = ctx.createRadialGradient(
+                dino.width / 2, dino.height + 2, 5,
+                dino.width / 2, dino.height + 2, 20
+            );
+            shadowGradient.addColorStop(0, 'rgba(0,0,0,0.3)');
+            shadowGradient.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = shadowGradient;
+            ctx.beginPath();
+            ctx.ellipse(dino.width / 2, dino.height + 2, 25, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            const bodyGradient = ctx.createLinearGradient(0, 0, dino.width, dino.height);
+            bodyGradient.addColorStop(0, '#66BB6A');
+            bodyGradient.addColorStop(0.5, '#4CAF50');
+            bodyGradient.addColorStop(1, '#2E7D32');
+            ctx.fillStyle = bodyGradient;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, dino.width, dino.height, 10);
+            ctx.fill();
+
+
+            const shineGradient = ctx.createLinearGradient(0, 0, dino.width * 0.7, dino.height * 0.3);
+            shineGradient.addColorStop(0, 'rgba(255,255,255,0.2)');
+            shineGradient.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = shineGradient;
+            ctx.beginPath();
+            ctx.roundRect(5, 5, dino.width - 15, 15, 6);
+            ctx.fill();
+
+
+            ctx.fillStyle = '#1B5E20';
+            ctx.beginPath();
+            ctx.arc(35, 15, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(35, 15, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            const eyeShine = ctx.createRadialGradient(37, 13, 1, 37, 13, 4);
+            eyeShine.addColorStop(0, 'rgba(255,255,255,0.8)');
+            eyeShine.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = eyeShine;
+            ctx.beginPath();
+            ctx.arc(37, 13, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(37, 15, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            if (!gameState.isJumping) {
+                const legOffset = Math.sin(Date.now() / 100) * 5;
+                const legGradient = ctx.createLinearGradient(0, dino.height - 20, 0, dino.height);
+                legGradient.addColorStop(0, '#2E7D32');
+                legGradient.addColorStop(1, '#1B5E20');
+                ctx.fillStyle = legGradient;
+
+
+                ctx.beginPath();
+                ctx.roundRect(10, dino.height - 10 + legOffset, 8, 12, 3);
+                ctx.fill();
+
+
+                ctx.beginPath();
+                ctx.roundRect(30, dino.height - 10 - legOffset, 8, 12, 3);
+                ctx.fill();
+            }
+
+            if (gameState.hasShield) {
+                ctx.strokeStyle = '#00FF00';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(dino.width / 2, dino.height / 2, 35, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        function updatePowerUps() {
+            gameState.powerUps.forEach((powerUp, index) => {
+                powerUp.x -= gameState.gameSpeed;
+
+                if (dino.x < powerUp.x + powerUp.width &&
+                    dino.x + dino.width > powerUp.x &&
+                    dino.y < powerUp.y + powerUp.height &&
+                    dino.y + dino.height > powerUp.y) {
+
+                    switch (powerUp.type) {
+                        case 'shield':
+                            gameState.hasShield = true;
+                            createParticles(powerUp.x, powerUp.y, '#4169E1', 15);
+                            setTimeout(() => gameState.hasShield = false, 10000);
+                            break;
+                        case 'speedBoost':
+                            gameState.gameSpeed *= 1.5;
+                            createParticles(powerUp.x, powerUp.y, '#00FF00', 15);
+                            gameState.powerUpTimers.speedBoost = 300;
+                            setTimeout(() => gameState.gameSpeed /= 1.5, 5000);
+                            break;
+                        case 'timeSlowdown':
+                            gameState.gameSpeed *= 0.5;
+                            createParticles(powerUp.x, powerUp.y, '#9370DB', 15);
+                            setTimeout(() => gameState.gameSpeed *= 2, 7000);
+                            break;
+                        case 'invincibility':
+                            gameState.hasShield = true;
+                            createParticles(powerUp.x, powerUp.y, '#FFD700', 20);
+                            break;
+                        case 'doublePoints':
+                            gameState.powerUpEffects.doublePoints = true;
+                            createParticles(powerUp.x, powerUp.y, '#FF00FF', 15);
+                            setTimeout(() => gameState.powerUpEffects.doublePoints = false, 8000);
+                            break;
+                        case 'sizeChange':
+                            dino.width *= 0.5;
+                            dino.height *= 0.5;
+                            createParticles(powerUp.x, powerUp.y, '#00FFFF', 15);
+                            setTimeout(() => {
+                                dino.width *= 2;
+                                dino.height *= 2;
+                            }, 6000);
+                            break;
+                    }
+
+                    gameState.powerUps.splice(index, 1);
+                }
+
+                if (powerUp.x < -powerUp.width) {
+                    gameState.powerUps.splice(index, 1);
+                }
+
+                powerUp.y += Math.sin(Date.now() / 200) * 0.5;
+            });
+        }
+
+        function drawPowerUps() {
+            gameState.powerUps.forEach(powerUp => {
+                ctx.fillStyle = powerUp.type === 'shield' ? '#00FF00' : '#FFD700';
+                ctx.beginPath();
+                ctx.arc(powerUp.x + powerUp.width / 2, powerUp.y + powerUp.height / 2, 10, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function spawnCoin() {
+            if (Math.random() < 0.03) {
+                gameState.coins.push({
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - 150) + 50,
+                    size: 15,
+                    rotation: 0
+                });
+            }
+        }
+
+        function spawnObstacle() {
+            if (!gameState.gameActive) return;
+
+            const now = Date.now();
+            const difficultyDelay = gameState.difficulty === 'easy' ? 2000 :
+                gameState.difficulty === 'normal' ? 1500 : 1000;
+
+            if (now - gameState.lastObstacleTime > difficultyDelay && gameState.score > 0) {
+                const types = ['cactus', 'spikes'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                const size = type === 'spikes' ? 45 : 30;
+                const y = ground.y - size;
+
+                if (gameState.obstacles.length < 3) {
+                    gameState.obstacles.push({
+                        x: canvas.width,
+                        y: y,
+                        width: size,
+                        height: size,
+                        type: type,
+                        rotation: 0,
+                        scale: 1,
+                        animationOffset: Math.random() * Math.PI * 2
+                    });
+
+                    createParticles(canvas.width, ground.y, '#8B8B8B', 5);
+                    gameState.lastObstacleTime = now;
+                }
+            }
+        }
+
+        function checkAchievements() {
+            gameState.achievements.list.forEach(achievement => {
+                if (!gameState.achievements.unlocked.includes(achievement.id)) {
+                    if ((achievement.id.startsWith('score') && gameState.score >= achievement.requirement) ||
+                        (achievement.id.startsWith('coins') && gameState.totalCoins >= achievement.requirement)) {
+                        gameState.achievements.unlocked.push(achievement.id);
+                        gameState.achievements.points += 100;
+                        localStorage.setItem('achievementPoints', gameState.achievements.points);
+                        localStorage.setItem('unlockedAchievements', JSON.stringify(gameState.achievements.unlocked));
+
+                        const notification = document.createElement('div');
+                        notification.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: linear-gradient(135deg, rgba(0,0,0,0.9), rgba(50,50,50,0.9));
+                    color: #FFD700;
+                    padding: 10px 20px;
+                    border-radius: 0 0 15px 15px;
+                    border: 2px solid rgba(255,215,0,0.3);
+                    border-top: none;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                    font-family: 'Segoe UI', Arial;
+                    font-weight: bold;
+                    transform: translateX(100%);
+                    animation: slideIn 0.5s forwards, glow 2s infinite, fadeOut 0.5s 2.5s forwards;
+                    backdrop-filter: blur(5px);
+                    z-index: 1000;
+                `;
+                        notification.innerHTML = `🏆 Achievement Unlocked!<br><span style="color: #FFF; font-size: 0.9em">${achievement.name}</span>`;
+
+
+                        if (!document.querySelector('#achievement-animations')) {
+                            const style = document.createElement('style');
+                            style.id = 'achievement-animations';
+                            style.textContent = `
+                                @keyframes slideIn {
+                                    to { transform: translateX(0); }
+                                }
+                                @keyframes glow {
+                                    0%, 100% { box-shadow: 0 0 20px rgba(255,215,0,0.2); }
+                                    50% { box-shadow: 0 0 30px rgba(255,215,0,0.4); }
+                                }
+                                @keyframes fadeOut {
+                                    to { opacity: 0; transform: translateY(-20px); }
+                                }
+                            `;
+                            document.head.appendChild(style);
+                        }
+
+                        document.body.appendChild(notification);
+                        createParticles(window.innerWidth - 150, 50, '#FFD700', 15);
+                        setTimeout(() => notification.remove(), 3000);
+                    }
+                }
+            });
+        }
+
+        function updateGame(deltaTime) {
+            if (!gameState.gameActive || !deltaTime) return;
+
+            gameState.coins.forEach((coin, index) => {
+                coin.x -= gameState.gameSpeed;
+                coin.rotation += 0.1;
+
+
+
+                if (dino.x < coin.x + coin.size &&
+                    dino.x + dino.width > coin.x &&
+                    dino.y < coin.y + coin.size &&
+                    dino.y + dino.height > coin.y) {
+                    const coinAnim = {
+                        x: coin.x,
+                        y: coin.y,
+                        alpha: 1,
+                        scale: 1
+                    };
+
+                    const animate = () => {
+                        coinAnim.y -= 2;
+                        coinAnim.alpha -= 0.05;
+                        coinAnim.scale += 0.1;
+
+                        ctx.save();
+                        ctx.globalAlpha = coinAnim.alpha;
+                        ctx.fillStyle = '#FFD700';
+                        ctx.font = `${20 * coinAnim.scale}px Arial`;
+                        ctx.fillText('+100', coinAnim.x, coinAnim.y);
+                        ctx.restore();
+
+                        if (coinAnim.alpha > 0) {
+                            requestAnimationFrame(animate);
+                        }
+                    };
+
+                    animate();
+                    gameState.coins.splice(index, 1);
+                    const baseScore = 100 * (1 + gameState.upgrades.scoreMultiplier * 0.2);
+                    gameState.score += baseScore;
+                    gameState.totalCoins++;
+                    gameState.persistentCoins++;
+                    localStorage.setItem('persistentCoins', gameState.persistentCoins);
+                    createParticles(coin.x, coin.y, '#FFD700', 12);
+                }
+
+                if (coin.x < -coin.size) {
+                    gameState.coins.splice(index, 1);
+                }
+            });
+
+            if (gameState.isJumping) {
+                dino.velocity += dino.gravity;
+                dino.y += dino.velocity;
+
+                if (dino.y >= canvas.height - 60) {
+                    dino.y = canvas.height - 60;
+                    dino.velocity = 0;
+                    gameState.isJumping = false;
+                    dino.doubleJump = false;
+                }
+            }
+
+            gameState.obstacles.forEach((obstacle, index) => {
+                obstacle.x -= gameState.gameSpeed;
+
+                if (dino.x < obstacle.x + obstacle.width &&
+                    dino.x + dino.width > obstacle.x &&
+                    dino.y < obstacle.y + obstacle.height &&
+                    dino.y + dino.height > obstacle.y) {
+                    if (!gameState.hasShield) {
+                        gameOver();
+                    } else {
+                        gameState.hasShield = false;
+                        gameState.obstacles.splice(index, 1);
+                        createParticles(obstacle.x, obstacle.y, '#FF0000', 10);
+                    }
+                }
+
+                if (obstacle.x < -obstacle.width) {
+                    gameState.obstacles.splice(index, 1);
+                }
+            });
+
+            gameState.particles = gameState.particles.filter(particle => {
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life--;
+                return particle.life > 0;
+            });
+
+            updatePowerUps();
+
+            gameState.score++;
+            checkAchievements();
+
+            const baseSpeed = 3;
+            const speedMultiplier = Math.min(1 + Math.floor(gameState.score / 3000) * 0.1, 2);
+            gameState.gameSpeed = baseSpeed * speedMultiplier;
+
+            if (gameState.score > 0) {
+                const difficultyIncrease = Math.min(Math.floor(gameState.score / 1000) * 0.05, 0.5);
+                dino.gravity = 0.6 + difficultyIncrease;
+            }
+
+            if (gameState.score > 1000) {
+                const obstacleChance = 0.02 + Math.min(Math.floor(gameState.score / 2000) * 0.005, 0.03);
+                if (Math.random() < obstacleChance) spawnObstacle();
+            }
+
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('highScore', gameState.highScore);
+            }
+
+            const now = Date.now();
+            if (now - gameState.lastCoinTime < 2000) {
+                gameState.scoreMultiplier = Math.min(gameState.scoreMultiplier + 0.5, 4);
+            } else {
+                gameState.scoreMultiplier = 1;
+            }
+
+            Object.keys(gameState.powerUpTimers).forEach(power => {
+                if (gameState.powerUpTimers[power] > 0) {
+                    gameState.powerUpTimers[power]--;
+                }
+            });
+
+            const formattedScore = Math.floor(gameState.score / 10).toString().padStart(5, '0');
+            const formattedHigh = Math.floor(gameState.highScore / 10).toString().padStart(5, '0');
+            scoreElement.innerHTML = `
+                <span style="color: #FFD700">SCORE: ${formattedScore}</span>
+                <span style="color: #4CAF50">x${gameState.scoreMultiplier}</span> | 
+                <span style="color: #FF5722">HIGH: ${formattedHigh}</span> | 
+                <span style="color: #2196F3">🏆 ${gameState.achievements.points}</span>`;
+
+            if (gameState.score > gameState.highScore) {
+                scoreElement.style.transform = 'scale(1.1)';
+                setTimeout(() => scoreElement.style.transform = 'scale(1)', 200);
+            }
+
+            if (Object.values(gameState.powerUpTimers).some(timer => timer > 0)) {
+                const barWidth = 100;
+                const barHeight = 10;
+                const x = canvas.width - barWidth - 20;
+                let y = 20;
+
+                Object.entries(gameState.powerUpTimers).forEach(([power, timer]) => {
+                    if (timer > 0) {
+                        const percentage = timer / 300;
+                        ctx.fillStyle = power === 'speedBoost' ? '#00FF00' :
+                            power === 'invincible' ? '#FFD700' :
+                                power === 'doublePoints' ? '#FF00FF' : '#00FFFF';
+                        ctx.fillRect(x, y, barWidth * percentage, barHeight);
+                        ctx.strokeRect(x, y, barWidth, barHeight);
+                        y += 15;
+                    }
+                });
+            }
+        }
+
+        function updateWeather() {
+            visualEffects.weather.weatherChangeTimer++;
+            if (visualEffects.weather.weatherChangeTimer > 500) {
+                visualEffects.weather.type = ['clear', 'rain', 'snow'][Math.floor(Math.random() * 3)];
+                visualEffects.weather.weatherChangeTimer = 0;
+            }
+
+            if (visualEffects.weather.type === 'rain') {
+                if (Math.random() < 0.3) {
+                    visualEffects.weather.raindrops.push({
+                        x: Math.random() * canvas.width,
+                        y: 0,
+                        speed: Math.random() * 5 + 10,
+                        length: Math.random() * 20 + 10
+                    });
+                }
+            } else if (visualEffects.weather.type === 'snow') {
+                if (Math.random() < 0.2) {
+                    visualEffects.weather.snowflakes.push({
+                        x: Math.random() * canvas.width,
+                        y: 0,
+                        size: Math.random() * 3 + 2,
+                        speed: Math.random() * 2 + 1,
+                        drift: Math.random() * 2 - 1
+                    });
+                }
+            }
+
+            visualEffects.weather.raindrops = visualEffects.weather.raindrops.filter(drop => {
+                drop.y += drop.speed;
+                return drop.y < canvas.height;
+            });
+
+            visualEffects.weather.snowflakes = visualEffects.weather.snowflakes.filter(flake => {
+                flake.y += flake.speed;
+                flake.x += flake.drift;
+                return flake.y < canvas.height && flake.x > 0 && flake.x < canvas.width;
+            });
+        }
+
+        function drawWeather() {
+            if (visualEffects.weather.type === 'rain') {
+                ctx.strokeStyle = 'rgba(174, 194, 224, 0.5)';
+                ctx.lineWidth = 1;
+                visualEffects.weather.raindrops.forEach(drop => {
+                    ctx.beginPath();
+                    ctx.moveTo(drop.x, drop.y);
+                    ctx.lineTo(drop.x + 1, drop.y + drop.length);
+                    ctx.stroke();
+                });
+            } else if (visualEffects.weather.type === 'snow') {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                visualEffects.weather.snowflakes.forEach(flake => {
+                    ctx.beginPath();
+                    ctx.arc(flake.x, flake.y, flake.size, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            updateWeather();
+
+            gameState.coins.forEach(coin => {
+                if (coin && coin.size > 0) {
+                    ctx.save();
+                    ctx.translate(coin.x + coin.size / 2, coin.y + coin.size / 2);
+                    ctx.rotate(coin.rotation);
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, Math.max(coin.size / 2, 1), 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            });
+
+            gameState.timeOfDay += 0.001;
+            const timeOfDay = (Math.sin(gameState.timeOfDay) + 1) / 2;
+
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+
+            if (timeOfDay < 0.3) {
+                gradient.addColorStop(0, '#0B1026');
+                gradient.addColorStop(0.4, '#1A237E');
+                gradient.addColorStop(0.7, '#283593');
+                gradient.addColorStop(1, '#3949AB');
+            } else if (timeOfDay < 0.7) {
+                gradient.addColorStop(0, '#2196F3');
+                gradient.addColorStop(0.4, '#4FC3F7');
+                gradient.addColorStop(0.7, '#81D4FA');
+                gradient.addColorStop(1, '#B3E5FC');
+            } else {
+                gradient.addColorStop(0, '#FF9800');
+                gradient.addColorStop(0.3, '#FB8C00');
+                gradient.addColorStop(0.6, '#F57C00');
+                gradient.addColorStop(1, '#EF6C00');
+            }
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+
+            const celestialY = 50 + Math.sin(gameState.timeOfDay) * 100;
+
+
+            const glowRadius = timeOfDay < 0.3 ? 40 : 50;
+            const glowGradient = ctx.createRadialGradient(100, celestialY, 0, 100, celestialY, glowRadius);
+            glowGradient.addColorStop(0, timeOfDay < 0.3 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,0,0.3)');
+            glowGradient.addColorStop(1, 'rgba(255,255,255,0)');
+
+            ctx.fillStyle = glowGradient;
+            ctx.beginPath();
+            ctx.arc(100, celestialY, glowRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            const celestialGradient = ctx.createRadialGradient(100, celestialY, 0, 100, celestialY, 30);
+            if (timeOfDay < 0.3) {
+                celestialGradient.addColorStop(0, '#FFFFFF');
+                celestialGradient.addColorStop(0.7, '#F5F5F5');
+                celestialGradient.addColorStop(1, '#E0E0E0');
+            } else {
+                celestialGradient.addColorStop(0, '#FFF176');
+                celestialGradient.addColorStop(0.7, '#FFEB3B');
+                celestialGradient.addColorStop(1, '#FBC02D');
+            }
+
+            ctx.fillStyle = celestialGradient;
+            ctx.beginPath();
+            ctx.arc(100, celestialY, 30, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            for (let i = 0; i < 4; i++) {
+                const x = (i * 200 + gameState.timeOfDay * 100) % canvas.width;
+                const y = 80 + Math.sin(gameState.timeOfDay + i) * 5;
+                const cloudOpacity = 0.8 + Math.sin(gameState.timeOfDay * 2 + i) * 0.1;
+
+
+                ctx.fillStyle = `rgba(0,0,0,${cloudOpacity * 0.1})`;
+                ctx.beginPath();
+                ctx.arc(x + 2, y + 2, 22, 0, Math.PI * 2);
+                ctx.arc(x + 17, y + 2, 17, 0, Math.PI * 2);
+                ctx.arc(x + 32, y + 2, 22, 0, Math.PI * 2);
+                ctx.fill();
+
+
+                const cloudGradient = ctx.createLinearGradient(x, y - 20, x, y + 20);
+                cloudGradient.addColorStop(0, `rgba(255,255,255,${cloudOpacity})`);
+                cloudGradient.addColorStop(1, `rgba(230,230,230,${cloudOpacity})`);
+
+                ctx.fillStyle = cloudGradient;
+                ctx.beginPath();
+                ctx.arc(x, y, 20, 0, Math.PI * 2);
+                ctx.arc(x + 15, y, 15, 0, Math.PI * 2);
+                ctx.arc(x + 30, y, 20, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+
+            if (timeOfDay < 0.3 && Math.random() < 0.01) {
+                createParticles(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height * 0.5,
+                    '#FFFFFF',
+                    3
+                );
+            }
+
+
+            mountains.forEach(mountain => {
+                const gradient = ctx.createLinearGradient(mountain.x, 0, mountain.x + 200, canvas.height);
+                gradient.addColorStop(0, '#4a4a4a');
+                gradient.addColorStop(1, '#2a2a2a');
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.moveTo(mountain.x, canvas.height);
+                ctx.lineTo(mountain.x + 100, canvas.height - 120);
+                ctx.lineTo(mountain.x + 200, canvas.height);
+                ctx.fill();
+
+
+                const shadowGradient = ctx.createLinearGradient(mountain.x, 0, mountain.x + 150, canvas.height);
+                shadowGradient.addColorStop(0, '#3a3a3a');
+                shadowGradient.addColorStop(1, '#1a1a1a');
+
+                ctx.fillStyle = shadowGradient;
+                ctx.beginPath();
+                ctx.moveTo(mountain.x + 60, canvas.height - 80);
+                ctx.lineTo(mountain.x + 100, canvas.height - 120);
+                ctx.lineTo(mountain.x + 140, canvas.height - 80);
+                ctx.fill();
+
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.moveTo(mountain.x + 85, canvas.height - 110);
+                ctx.lineTo(mountain.x + 100, canvas.height - 120);
+                ctx.lineTo(mountain.x + 115, canvas.height - 110);
+                ctx.fill();
+
+                mountain.x -= mountain.speed * (gameState.gameSpeed / 4);
+                if (mountain.x < -200) mountain.x = canvas.width;
+            });
+
+            drawWeather();
+            drawGround();
+            drawDino();
+            drawPowerUps();
+
+
+            gameState.obstacles.forEach(obstacle => {
+                ctx.save();
+                if (obstacle.type === 'cactus') {
+                    const gradient = ctx.createLinearGradient(obstacle.x, obstacle.y, obstacle.x + obstacle.width, obstacle.y);
+                    gradient.addColorStop(0, '#2d5a27');
+                    gradient.addColorStop(1, '#1e401c');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+
+
+                    ctx.fillStyle = '#1e401c';
+                    ctx.fillRect(obstacle.x + obstacle.width / 3, obstacle.y + 5, 4, obstacle.height - 10);
+                    ctx.fillRect(obstacle.x + obstacle.width * 2 / 3, obstacle.y + 8, 4, obstacle.height - 16);
+                } else {
+                    const gradient = ctx.createLinearGradient(obstacle.x, obstacle.y, obstacle.x, obstacle.y + obstacle.height);
+                    gradient.addColorStop(0, '#8B4513');
+                    gradient.addColorStop(1, '#654321');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+
+
+                    ctx.fillStyle = '#654321';
+                    ctx.beginPath();
+                    ctx.moveTo(obstacle.x, obstacle.y);
+                    ctx.lineTo(obstacle.x + obstacle.width / 2, obstacle.y - 10);
+                    ctx.lineTo(obstacle.x + obstacle.width, obstacle.y);
+                    ctx.fill();
+                }
+                ctx.restore();
+            });
+
+            gameState.particles.forEach(particle => {
+                ctx.save();
+                particle.opacity = particle.life / 60;
+                ctx.globalAlpha = particle.opacity;
+                ctx.fillStyle = particle.color;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size * (1 + (1 - particle.opacity) * 0.5), 0, Math.PI * 2);
+                ctx.fill();
+                if (particle.opacity > 0.5) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+                ctx.restore();
+            });
+        }
+
+        function startGame() {
+            gameState.gameActive = true;
+            gameState.score = 0;
+            gameState.gameSpeed = gameState.initialGameSpeed;
+            gameState.obstacles = [];
+            gameState.coins = [];
+            gameState.powerUps = [];
+            gameState.particles = [];
+            gameState.hasShield = false;
+            gameState.lastFrameTime = null;
+            dino.y = canvas.height - 60;
+            dino.velocity = 0;
+            gameState.isJumping = false;
+            if (gameState.persistentCoins < 500) {
+                gameState.persistentCoins = 500;
+                localStorage.setItem('persistentCoins', gameState.persistentCoins);
+                updateShopDisplay();
+            }
+            mainMenu.style.display = 'none';
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            gameState.gameActive = false;
+            const fadeOut = {opacity: 1};
+
+            createParticles(dino.x + dino.width / 2, dino.y + dino.height / 2, '#FF0000', 20);
+
+            const fade = () => {
+                fadeOut.opacity -= 0.05;
+                ctx.fillStyle = `rgba(0, 0, 0, ${1 - fadeOut.opacity})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+
+                render();
+
+                if (fadeOut.opacity > 0) {
+                    requestAnimationFrame(fade);
+                } else {
+                    mainMenu.style.display = 'flex';
+                    mainMenu.style.animation = 'fadeIn 0.5s ease-in';
+                    document.getElementById('highScore').textContent = `High Score: ${Math.floor(gameState.highScore / 10)}`;
+                }
+            };
+            fade();
+        }
+
+        function gameLoop(currentTime) {
+            if (gameState.shutdown) return;
+
+            if (!gameState.lastFrameTime) {
+                gameState.lastFrameTime = currentTime;
+            }
+
+            const deltaTime = currentTime - gameState.lastFrameTime;
+            gameState.lastFrameTime = currentTime;
+
+            spawnCoin();
+            spawnPowerUp();
+            spawnObstacle();
+            updateGame(deltaTime);
+            render();
+
+            if (gameState.gameActive) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function jump() {
+            if (!gameState.isJumping || (gameState.isJumping && !dino.doubleJump)) {
+                if (gameState.isJumping) {
+                    dino.doubleJump = true;
+                }
+                gameState.isJumping = true;
+                dino.velocity = dino.jumpForce;
+                createParticles(dino.x + dino.width / 2, dino.y + dino.height, '#D3D3D3', 5);
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                jump();
+            }
+        });
+
+        jumpButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            jump();
+        });
+
+        function openSettings() {
+            document.getElementById('settingsMenu').style.display = 'block';
+            mainMenu.style.display = 'none';
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsMenu').style.display = 'none';
+            mainMenu.style.display = 'flex';
+        }
+
+        function openShop() {
+            document.getElementById('shopMenu').style.display = 'block';
+            mainMenu.style.display = 'none';
+            updateShopDisplay();
+        }
+
+        function closeShop() {
+            document.getElementById('shopMenu').style.display = 'none';
+            mainMenu.style.display = 'flex';
+        }
+
+        function updateShopDisplay() {
+            document.getElementById('doubleJumpLevel').textContent = gameState.upgrades.doubleJumpHeight;
+            document.getElementById('scoreMultLevel').textContent = gameState.upgrades.scoreMultiplier;
+            document.getElementById('persistentCoins').textContent = `Coins: ${gameState.persistentCoins}`;
+        }
+
+        function buyUpgrade(type) {
+            const costs = {
+                doubleJumpHeight: 100,
+                scoreMultiplier: 150
+            };
+
+            const maxLevel = 5;
+
+            if (gameState.persistentCoins >= costs[type] && gameState.upgrades[type] < maxLevel) {
+                gameState.persistentCoins -= costs[type];
+                gameState.upgrades[type]++;
+                localStorage.setItem('persistentCoins', gameState.persistentCoins);
+                localStorage.setItem('upgrades', JSON.stringify(gameState.upgrades));
+                updateShopDisplay();
+
+
+                if (type === 'doubleJumpHeight') {
+                    dino.jumpForce = -12 - (gameState.upgrades.doubleJumpHeight * 0.5);
+                }
+
+
+                if (gameState.upgrades[type] >= maxLevel) {
+                    const buttons = document.querySelectorAll('.menu-button');
+                    buttons.forEach(button => {
+                        if (button.getAttribute('onclick') === `buyUpgrade('${type}')`) {
+                            button.disabled = true;
+                            button.style.opacity = '0.5';
+                            button.textContent = 'MAX';
+                        }
+                    });
+                }
+            }
+        }
+
+        document.getElementById('difficultySelect').addEventListener('change', (e) => {
+            gameState.difficulty = e.target.value;
+        });
+    </script>
+</body>
+
+</html>
